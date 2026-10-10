@@ -5,6 +5,8 @@
 > 技术栈：**Quasar (Vue 3 + Vite) + Tauri 2**，加密全部在 Rust 侧完成
 > 状态：Windows / Android 已实现并接入 GitHub Actions 自动打包发布（`cargo test` 通过，桌面端本地构建通过）
 
+![SafeText 主界面](docs/screenshot.png)
+
 ---
 
 ## 一、核心目标
@@ -101,6 +103,10 @@
 
 ## 六、界面
 
+主界面见文首截图。新建 / 改密时的密码框：
+
+![新建文档的密码框](docs/screenshot-password.png)
+
 - 顶部工具栏 `q-toolbar` + `q-btn`：新建 / 打开 / 保存 / 另存为 / 改密码 / 锁定
 - 中间一个占满窗口的多行文本框（等宽字体）
 - 底部状态栏：文件名、加密状态、保存状态、算法标识
@@ -147,6 +153,7 @@ safe-text/
       settings.rs  # 设置（桌面便携优先）
       errors.rs    # 错误 → 中文提示
   README.md
+  docs/         # README 引用的界面截图
 ```
 
 ### 命令接口（Rust → 前端 `invoke`）
