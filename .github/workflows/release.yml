@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+          # Intel Mac
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+          - platform: ubuntu-22.04
+            args: ''
+          - platform: windows-latest
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libfuse2
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'SafeText v__VERSION__'
+          releaseBody: |
+            ## SafeText v__VERSION__ · 透明加密 TXT 记事本
+
+            加密后的 `.txt` 文件只有本软件能正常打开，其它编辑器（记事本、VS Code 等）打开均为乱码。
+
+            ### 安全
+            - AES-256-GCM 认证加密
+            - Argon2id 密钥派生（随机 salt）
+            - 48 字节自定义容器头，头部作 GCM AAD
+            - 密码不存储、无后门；请务必牢记密码，遗失后无法恢复
+
+            ### 下载
+            请根据你的系统选择下方 Assets 中的安装包：
+            - Windows: `.msi` / `-setup.exe`
+            - macOS: `.dmg`（区分 Apple Silicon / Intel）
+            - Linux: `.AppImage` / `.deb` / `.rpm`
+
+            ### 文件格式
+            `Magic(STXT) + version + kdf + cipher + costs + salt(16) + nonce(12) + ciphertext + tag(16)`
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
