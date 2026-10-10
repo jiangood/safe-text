@@ -1,229 +1,232 @@
-# SafeText · TXT 透明加密记事本
+# SafeText · Transparently-encrypted TXT Notepad
 
-一个**绿色免安装**的小工具，用于加密单个 `.txt` 文件。加密后的文件**只有本软件能正常打开编辑**，用系统记事本、Notepad++、VS Code 等任何其他软件打开都是乱码。
+**English** · [简体中文](README.zh-CN.md)
 
-> 技术栈：**Quasar (Vue 3 + Vite) + Tauri 2**，加密全部在 Rust 侧完成
-> 状态：Windows / Android 已实现并接入 GitHub Actions 自动打包发布（`cargo test` 通过，桌面端本地构建通过）
+A tiny **portable, no-install** tool for encrypting a single `.txt` file. The encrypted file **can only be opened and edited by this app** — open it with Notepad, Notepad++, VS Code or anything else and you get garbage.
 
-![SafeText 主界面](docs/screenshot.png)
+> Stack: **Quasar (Vue 3 + Vite) + Tauri 2**, with all crypto done on the Rust side
+> Status: Windows / Android implemented and wired into GitHub Actions for automatic packaging + release (`cargo test` passing, desktop build passing locally)
 
----
-
-## 一、核心目标
-
-- 加密单个 `.txt` 文件，保留 `.txt` 后缀
-- 只有本软件能正常打开 / 编辑，其它编辑器打开呈现乱码
-- 密码错误拒绝打开并提示
-- 标准密码学，不自创算法、不硬编码密钥
-
-**发布平台**：Windows（`.msi` / `-setup.exe`）+ Android（`.apk`），同一份 Rust 加密代码。
+![SafeText main window](docs/screenshot.png)
 
 ---
 
-## 二、功能
+## 1. Goals
 
-| 功能 | 说明 | 状态 |
+- Encrypt a single `.txt` file, keeping the `.txt` suffix
+- Only this app can open / edit it; every other editor shows garbage
+- A wrong password refuses to open the file and shows a message
+- Standard cryptography — no home-grown algorithms, no hard-coded keys
+
+**Release targets**: Windows (`.msi` / `-setup.exe`) + Android (`.apk`), sharing the same Rust crypto code.
+
+---
+
+## 2. Features
+
+| Feature | Description | Status |
 |---|---|---|
-| 新建 | 设密码 → 加密 → 另存为 `.txt` | ✅ |
-| 打开 | 选加密文件 → 输密码 → 解密显示明文 | ✅ |
-| 编辑 | 单多行文本框直接编辑 | ✅ |
-| 保存 | 重新加密写回原文件（新 nonce，无需重输密码） | ✅ |
-| 另存为 | 加密写到新路径 | ✅ |
-| 修改密码 | 新 salt + 新密钥重新加密写回 | ✅ |
-| 锁定 | 清空界面并丢弃密钥 | ✅ |
-| 拖拽打开 | 文件拖入窗口 → 弹密码框 | ✅（桌面） |
-| 闲置自动锁定 | 默认 5 分钟，到时清空并丢弃密钥 | ✅ |
-| 键盘快捷键 | Ctrl+N / O / S / Shift+S / L | ✅ |
+| New | Set password → encrypt → save as `.txt` | ✅ |
+| Open | Pick an encrypted file → enter password → decrypt to plaintext | ✅ |
+| Edit | Edit directly in a multiline text box | ✅ |
+| Save | Re-encrypt and write back to the same file (new nonce, no need to re-enter the password) | ✅ |
+| Save As | Encrypt to a new path | ✅ |
+| Change password | New salt + new key, re-encrypt and write back | ✅ |
+| Lock | Clear the UI and drop the key | ✅ |
+| Drag & drop open | Drop a file onto the window → password prompt | ✅ (desktop) |
+| Idle auto-lock | 5 minutes by default; clears and drops the key | ✅ |
+| Keyboard shortcuts | Ctrl+N / O / S / Shift+S / L | ✅ |
 
-> 隐私：**不保留"最近打开列表"**，设置文件不含任何文件路径。
+> Privacy: **no "recent files" list** is kept, and the settings file contains no file paths.
 
 ---
 
-## 三、安全设计
+## 3. Security design
 
-| 项目 | 实现 |
+| Item | Implementation |
 |---|---|
-| 加密算法 | **AES-256-GCM**（认证加密，密文尾部 16 字节 tag） |
-| 密钥派生 | **Argon2id**，随机 16 字节 salt，默认 m=64 MiB / t=3 / p=1 |
-| 随机数 | `getrandom`（操作系统 CSPRNG）生成 salt / nonce |
-| 完整性 | 前 48 字节文件头作为 **GCM AAD**，篡改头部即解密失败 |
-| 文件格式 | 固定 48 字节头（salt + nonce + 参数 + 版本），其后密文 |
-| 内存安全 | 派生密钥用 `zeroize::Zeroizing` 包裹，锁定 / 退出即擦除 |
-| 禁止项 | 不自创加密算法，不硬编码密钥，不保存密码 |
-| 密码 | 不存储、无后门；丢失即**永久无法恢复** |
+| Cipher | **AES-256-GCM** (authenticated encryption; a 16-byte tag at the end of the ciphertext) |
+| Key derivation | **Argon2id**, random 16-byte salt, defaults m=64 MiB / t=3 / p=1 |
+| Randomness | `getrandom` (OS CSPRNG) for salt / nonce |
+| Integrity | The first 48-byte header is used as the **GCM AAD**; tampering with the header fails decryption |
+| File format | Fixed 48-byte header (salt + nonce + params + version), ciphertext after it |
+| Memory safety | Derived keys are wrapped in `zeroize::Zeroizing` and wiped on lock / exit |
+| Never | No home-grown crypto, no hard-coded keys, no stored passwords |
+| Password | Not stored, no backdoor; if lost, it is **permanently unrecoverable** |
 
 ---
 
-## 四、技术栈
+## 4. Tech stack
 
-| 层 | 选型 | 版本 |
+| Layer | Choice | Version |
 |---|---|---|
-| UI 框架 | Quasar（Vue 3 + Vite，`@quasar/app-vite`） | quasar 2.35 / app-vite 3.10 |
-| 原生壳 | Tauri 2（Rust，`edition 2024`） | tauri 2.12 / tauri-build 2.7 |
-| 文件对话框 | `tauri-plugin-dialog` | 2.8 |
-| 文件读写 | `tauri-plugin-fs`（桌面 + Android `content://`） | 2.6 |
-| 日志 | `tauri-plugin-log` | 2 |
-| 对称加密 | `aes-gcm`（AES-256-GCM） | 0.11 |
-| 密钥派生 | `argon2`（Argon2id） | 0.6 |
-| 随机数 | `getrandom`（OS CSPRNG） | 0.4 |
-| 内存擦除 | `zeroize` | 1 |
-| 设置存储 | 自研便携优先 JSON（见 §八） | — |
+| UI framework | Quasar (Vue 3 + Vite, `@quasar/app-vite`) | quasar 2.35 / app-vite 3.10 |
+| Native shell | Tauri 2 (Rust, `edition 2024`) | tauri 2.12 / tauri-build 2.7 |
+| File dialogs | `tauri-plugin-dialog` | 2.8 |
+| File I/O | `tauri-plugin-fs` (desktop + Android `content://`) | 2.6 |
+| Logging | `tauri-plugin-log` | 2 |
+| Symmetric crypto | `aes-gcm` (AES-256-GCM) | 0.11 |
+| Key derivation | `argon2` (Argon2id) | 0.6 |
+| Randomness | `getrandom` (OS CSPRNG) | 0.4 |
+| Memory wiping | `zeroize` | 1 |
+| Settings storage | Hand-rolled portable-first JSON (see §8) | — |
 
-**关键决策**
-- 加密放 **Rust**：可用 Argon2id（WebCrypto 无）、`zeroize` 可靠擦除、桌面与 Android 复用同一份代码。
-- **文件 I/O 放前端插件**：用 `dialog` + `fs` 插件读写，天然支持 Android `content://` URI；加密命令只收发字节，不碰文件系统（便于单测）。
-- 拖拽打开由 Rust 命令 `read_file` 读取（拖入路径没有对话框授权 scope）。
-- 不保留"最近打开列表"，配置不保存文件路径。
+**Key decisions**
+- Crypto lives in **Rust**: Argon2id (not available in WebCrypto), reliable wiping via `zeroize`, and one shared implementation for desktop and Android.
+- **File I/O lives in frontend plugins**: read / write via the `dialog` + `fs` plugins, which naturally support Android `content://` URIs; the crypto commands only exchange bytes and never touch the filesystem (easy to unit test).
+- Drag & drop open is read by the Rust `read_file` command (a dropped path has no dialog-authorized scope).
+- No "recent files" list; the config stores no file paths.
 
 ---
 
-## 五、文件格式 v1（48 字节固定头，大端）
+## 5. File format v1 (fixed 48-byte header, big-endian)
 
 ```
-偏移  长度  字段
-0     4     Magic "STXT"
-4     1     版本 = 0x01
-5     1     KDF 标识 = 0x01 (Argon2id)
-6     1     加密标识 = 0x01 (AES-256-GCM)
-7     1     保留(0)
-8     4     Argon2 m_cost (KiB, 默认 65536)
-12    4     Argon2 t_cost (默认 3)
-16    4     Argon2 p_cost (默认 1)
-20    16    salt
-36    12    nonce / IV
-48    ..    密文 + 16 字节 GCM tag
+Offset Length Field
+0      4      Magic "STXT"
+4      1      version = 0x01
+5      1      KDF id = 0x01 (Argon2id)
+6      1      cipher id = 0x01 (AES-256-GCM)
+7      1      reserved (0)
+8      4      Argon2 m_cost (KiB, default 65536)
+12     4      Argon2 t_cost (default 3)
+16     4      Argon2 p_cost (default 1)
+20     16     salt
+36     12     nonce / IV
+48     ..     ciphertext + 16-byte GCM tag
 ```
 
-- 前 48 字节作为 GCM 的 **AAD**，头部被篡改会解密失败
-- 每次保存生成**新 nonce**；"修改密码"重新生成 salt + 密钥
-- Magic 不符 → `不是有效加密文件`；GCM 校验失败 → `密码错误或文件已损坏`
-- 参数写在头里，将来调整默认强度仍可读旧文件
+- The first 48 bytes are used as the GCM **AAD**; a tampered header fails decryption
+- Every save generates a **new nonce**; "change password" regenerates the salt + key
+- Bad magic → `not a valid encrypted file`; GCM check fails → `wrong password or corrupted file`
+- Params are stored in the header, so old files stay readable if the defaults are changed later
 
 ---
 
-## 六、界面
+## 6. UI
 
-主界面见文首截图。新建 / 改密时的密码框：
+The main window is shown at the top of this README. The password box used for New / Change password:
 
-![新建文档的密码框](docs/screenshot-password.png)
+![Password box for a new document](docs/screenshot-password.png)
 
-- 顶部工具栏 `q-toolbar` + `q-btn`：新建 / 打开 / 保存 / 另存为 / 改密码 / 锁定
-- 中间一个占满窗口的多行文本框（等宽字体）
-- 底部状态栏：文件名、加密状态、保存状态、算法标识
-- 密码框 `q-dialog`：新建 / 改密二次确认并校验长度；标题栏显示文件名 + `*`（未保存）
+- Top toolbar `q-toolbar` + `q-btn`: New / Open / Save / Save As / Change password / Lock
+- A single full-window multiline text box in the middle (monospace)
+- Bottom status bar: file name, lock state, save state, algorithm label
+- Password box `q-dialog`: double-entry confirmation and length validation for New / Change; the title bar shows the file name + `*` (unsaved)
 
 ---
 
-## 七、跨平台处理
+## 7. Cross-platform handling
 
-| 维度 | 桌面 | Android |
+| Aspect | Desktop | Android |
 |---|---|---|
-| 选文件 | 原生对话框（dialog 插件） | SAF（`text/plain`），返回 `content://` |
-| 读 / 写 | fs 插件（路径） | fs 插件（`content://`） |
-| 打开入口 | 拖拽文件 | 分享 Intent（`ACTION_VIEW` / `ACTION_SEND`，待做） |
-| 自动锁定 | 闲置计时 | 闲置计时 + `onPause/onStop`（待做） |
-| 设置存储 | 便携优先，否则系统配置目录 | 应用配置目录 |
+| Pick file | Native dialog (dialog plugin) | SAF (`text/plain`), returns `content://` |
+| Read / write | fs plugin (path) | fs plugin (`content://`) |
+| Open entry point | Drag & drop a file | Share Intent (`ACTION_VIEW` / `ACTION_SEND`, TODO) |
+| Auto-lock | Idle timer | Idle timer + `onPause/onStop` (TODO) |
+| Settings storage | Portable-first, else the system config dir | App config dir |
 
-**文本处理**：按字节读入 → 校验头 → 解密 → UTF-8 解码。非 UTF-8（如 GBK）会明确提示"内容不是有效的文本"，不静默损坏。
-**已知限制**：HTML `textarea` 会把 CRLF 规范化为 LF，因此编辑后保存可能改变行尾；BOM 会作为 `U+FEFF` 原样保留。
+**Text handling**: read as bytes → validate header → decrypt → UTF-8 decode. Non-UTF-8 input (e.g. GBK) produces an explicit "content is not valid text" message instead of silent corruption.
+**Known limitation**: the HTML `textarea` normalizes CRLF to LF, so saving after editing may change line endings; a BOM is preserved as `U+FEFF`.
 
 ---
 
-## 八、工程结构
+## 8. Project layout
 
 ```
 safe-text/
   package.json          quasar.config.js      index.html
   src/
     App.vue
-    pages/IndexPage.vue                 # 编辑器页面（工具栏 + 文本框 + 密码框 + 自动锁定 + 拖拽）
-    services/backend.js                 # 调用 Rust 命令 & Tauri 插件（对话框 / 文件 / 拖拽）
+    pages/IndexPage.vue                 # editor page (toolbar + textarea + password dialog + auto-lock + drag & drop)
+    services/backend.js                 # calls Rust commands & Tauri plugins (dialog / fs / drag & drop)
     router/{index.js,routes.js}
     css/{app.scss,quasar.variables.scss}
   src-tauri/
     Cargo.toml  tauri.conf.json  build.rs
     capabilities/default.json
     src/
-      main.rs      # 桌面入口
-      lib.rs       # Builder：注册插件、命令、会话状态
-      commands.rs  # 暴露给前端的命令
-      session.rs   # 会话状态：Zeroizing 密钥 + salt + 参数
-      crypto.rs    # Argon2id + AES-256-GCM（含单元测试）
-      format.rs    # 48 字节头编解码
-      settings.rs  # 设置（桌面便携优先）
-      errors.rs    # 错误 → 中文提示
+      main.rs      # desktop entry point
+      lib.rs       # Builder: registers plugins, commands, session state
+      commands.rs  # commands exposed to the frontend
+      session.rs   # session state: Zeroizing key + salt + params
+      crypto.rs    # Argon2id + AES-256-GCM (with unit tests)
+      format.rs    # 48-byte header encode / decode
+      settings.rs  # settings (portable-first on desktop)
+      errors.rs    # errors → Chinese messages
   README.md
-  docs/         # README 引用的界面截图
+  README.zh-CN.md
+  docs/         # UI screenshots referenced by the README
 ```
 
-### 命令接口（Rust → 前端 `invoke`）
+### Command interface (Rust → frontend `invoke`)
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `new_document(password, text)` | 新加密文档，解锁会话，返回密文字节 |
-| `open_document(password, data)` | 解密，解锁会话，返回明文 |
-| `save_document(text)` | 用缓存密钥重新加密（新 nonce），返回密文字节 |
-| `change_password(new_password, text)` | 新 salt+密钥重新加密，更新会话 |
-| `lock()` | 清空并擦除会话密钥 |
-| `probe_file(data)` | 结构探测，判断是否为 SafeText 文件 |
-| `read_file(path)` | 按路径读文件（拖拽用） |
-| `load_settings()` / `save_settings(settings)` | 读写设置 |
+| `new_document(password, text)` | New encrypted document; unlock the session; return ciphertext bytes |
+| `open_document(password, data)` | Decrypt; unlock the session; return plaintext |
+| `save_document(text)` | Re-encrypt with the cached key (new nonce); return ciphertext bytes |
+| `change_password(new_password, text)` | New salt + key, re-encrypt; update the session |
+| `lock()` | Clear and wipe the session key |
+| `probe_file(data)` | Structural probe: is this a SafeText file? |
+| `read_file(path)` | Read a file by path (for drag & drop) |
+| `load_settings()` / `save_settings(settings)` | Read / write settings |
 
 ---
 
-## 九、构建与验证
+## 9. Build & verify
 
-### 前置
+### Prerequisites
 
-- Node ≥ 22、Rust ≥ 1.90、Tauri 2 系统依赖
-- Windows 需 MSVC 链接器（在 `vcvars64.bat` 环境下构建）
+- Node ≥ 22, Rust ≥ 1.90, Tauri 2 system dependencies
+- On Windows you need the MSVC linker (build inside a `vcvars64.bat` environment)
 
-### 桌面
+### Desktop
 
 ```bash
 npm install
-npm run tauri:dev      # 原生开发窗口（先跑 quasar dev 再起 Tauri）
-npm run tauri:build    # 产出桌面安装包 / exe
-npm run build          # 仅构建前端 SPA（输出 dist/spa）
+npm run tauri:dev      # native dev window (runs quasar dev, then starts Tauri)
+npm run tauri:build    # produces the desktop installer / exe
+npm run build          # build the frontend SPA only (outputs dist/spa)
 ```
 
-`src-tauri/tauri.conf.json` 已配置：`beforeDevCommand = npm run dev`、`devUrl = http://localhost:9000`、`beforeBuildCommand = npm run build`、`frontendDist = ../dist/spa`。
+`src-tauri/tauri.conf.json` is configured with: `beforeDevCommand = npm run dev`, `devUrl = http://localhost:9000`, `beforeBuildCommand = npm run build`, `frontendDist = ../dist/spa`.
 
 ### Android
 
-本地需要 Android SDK + NDK + JDK（Tauri 2 无需单独装 `cargo-ndk`）：
+Locally you need the Android SDK + NDK + JDK (Tauri 2 does not require a separate `cargo-ndk`):
 
 ```bash
 npm run tauri -- android init
 npm run tauri -- android build --apk
 ```
 
-- 前置：Android SDK + NDK + JDK 17+ + android rust targets（`aarch64-linux-android` 等，Tauri 会自动按需安装）。
-- 无模拟器 / 真机时只能编译 APK，无法实测运行。
-- 发布时由 GitHub Actions 自动完成 `android init` → `build --apk` → 用仓库 Secrets 中的签名密钥 `apksigner` 签名 → 上传到同一次 Release。
+- Prerequisites: Android SDK + NDK + JDK 17+ + android rust targets (`aarch64-linux-android`, etc.; Tauri installs them on demand).
+- Without an emulator / device you can only compile the APK, not actually run it.
+- On release, GitHub Actions automatically does `android init` → `build --apk` → signs with the key from the repo Secrets via `apksigner` → uploads to the same Release.
 
-> ⚠️ Release 构建未经签名验证，装机会提示“未知来源”；Keep 好签名密钥（仓库 Secrets `ANDROID_KEYSTORE_*`），后续版本须用同一密钥才能覆盖安装。
+> ⚠️ The release build is not signature-verified, so installing it shows an "unknown source" prompt. Keep your signing key safe (repo Secrets `ANDROID_KEYSTORE_*`); future versions must use the same key to update in place.
 
-### 验证
+### Verification
 
-1. `cargo test`（在 `src-tauri/`）：加解密往返、错误密码拒绝、篡改检测、头部篡改、Magic 校验、截断报错、空内容
-2. 桌面实测：新建 → 保存 → 记事本打开乱码 → 本软件重开正常 → 改密码 → 重开正常
-3. Android：CI 编译并签名产出 APK（本机无 SDK/NDK 时无法本地实测，属已知限制）
-
----
-
-## 十、已知风险 / 待办
-
-1. **Android 真机行为未实测**：CI 能编译并签名产出 APK，但无模拟器/真机，运行期（尤其 `content://` 读写、自动锁定）需实机验证。
-2. **Android 写回 `content://`** 存在插件已知坑（plugins-workspace #3356），如遇问题可换 `tauri-plugin-android-fs` 或补一小段 Kotlin/JNI。
-3. **分享 Intent**（Android 从文件管理器直接打开）尚未实现。
-4. **应用级 CSP** 目前关闭以保证 Tauri IPC 稳定；后续可在 `tauri.conf.json` 的 `app.security.csp` 收紧。
-5. **CRLF 行尾**在编辑保存后可能被规范化为 LF（见 §七）。
+1. `cargo test` (in `src-tauri/`): round-trip, wrong-password rejection, tamper detection, header tampering, magic check, truncation error, empty content
+2. Manual desktop test: New → Save → open in Notepad (garbage) → reopen in this app (fine) → change password → reopen (fine)
+3. Android: CI compiles and signs the APK (cannot be tested locally without SDK/NDK — a known limitation)
 
 ---
 
-## 十一、安全提醒
+## 10. Known risks / TODO
 
-- 密码丢失 = 文件**永久无法恢复**，软件不存密码、无后门
-- 重要文件建议保留未加密备份
-- 不要用来路不明的第三方"加密算法"
+1. **Android behavior not tested on a real device**: CI compiles and signs the APK, but there is no emulator / device; runtime behavior (especially `content://` read / write and auto-lock) needs real-device verification.
+2. **Writing back to Android `content://`** hits a known plugin issue (plugins-workspace #3356); if it bites, switch to `tauri-plugin-android-fs` or add a small Kotlin/JNI shim.
+3. **Share Intent** (opening directly from the Android file manager) is not implemented yet.
+4. **App-level CSP** is currently disabled to keep Tauri IPC stable; it can be tightened later via `app.security.csp` in `tauri.conf.json`.
+5. **CRLF line endings** may be normalized to LF after editing and saving (see §7).
+
+---
+
+## 11. Security notes
+
+- Losing the password = the file is **permanently unrecoverable**; the app stores no password and has no backdoor
+- Keep an unencrypted backup of important files
+- Do not use unknown third-party "encryption algorithms"
