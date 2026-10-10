@@ -7,25 +7,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  # ---------------------------------------------------------------------------
+  # Windows desktop build (creates + publishes the GitHub Release)
+  # ---------------------------------------------------------------------------
+  windows:
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Apple Silicon
-          - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
-          # Intel Mac
-          - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
-          - platform: ubuntu-22.04
-            args: ''
-          - platform: windows-latest
-            args: ''
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -39,29 +27,11 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libfuse2
 
       - name: Install frontend dependencies
         run: npm ci
@@ -86,12 +56,120 @@ jobs:
 
             ### 下载
             请根据你的系统选择下方 Assets 中的安装包：
-            - Windows: `.msi` / `-setup.exe`
-            - macOS: `.dmg`（区分 Apple Silicon / Intel）
-            - Linux: `.AppImage` / `.deb` / `.rpm`
+            - **Windows**：`.msi` 或 `-setup.exe`
+            - **Android**：`.apk`（需在系统设置中允许“安装未知来源应用”）
 
             ### 文件格式
             `Magic(STXT) + version + kdf + cipher + costs + salt(16) + nonce(12) + ciphertext + tag(16)`
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
+
+  # ---------------------------------------------------------------------------
+  # Android APK build (runs after the release is created, signs + uploads APK)
+  # ---------------------------------------------------------------------------
+  android:
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    needs: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27d
+          add-to-path: false
+          link-to-sdk: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Init Android project
+        env:
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: npx tauri android init
+
+      - name: Fix gradlew permissions
+        run: chmod +x src-tauri/gen/android/gradlew
+
+      - name: Build Android APK (unsigned)
+        env:
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: npx tauri android build --apk
+
+      - name: Sign APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          KS="$RUNNER_TEMP/release.keystore"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
+
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found under \$ANDROID_HOME/build-tools"
+            exit 1
+          fi
+
+          UNSIGNED="$(find src-tauri/gen/android/app/build/outputs/apk -name '*unsigned*.apk' -type f | head -n 1)"
+          if [ -z "$UNSIGNED" ]; then
+            UNSIGNED="$(find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -type f | head -n 1)"
+          fi
+          if [ -z "$UNSIGNED" ]; then
+            echo "::error::No APK found under src-tauri/gen/android/app/build/outputs/apk"
+            exit 1
+          fi
+
+          SIGNED="${RUNNER_TEMP}/SafeText.apk"
+          "$APKSIGNER" sign \
+            --ks "$KS" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+            --key-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+            --out "$SIGNED" \
+            "$UNSIGNED"
+          "$APKSIGNER" verify --print-certs "$SIGNED"
+
+          echo "SIGNED_APK=$SIGNED" >> "$GITHUB_ENV"
+
+      - name: Upload APK to release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          echo ">> Uploading $SIGNED_APK to release v${VERSION}"
+          gh release upload "v${VERSION}" "$SIGNED_APK" --clobber

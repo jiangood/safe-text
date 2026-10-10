@@ -29,6 +29,8 @@ yarn-error.log*
 /src-tauri/target
 /target
 /src-tauri/gen/schemas
+/src-tauri/gen/android
+/src-tauri/gen/apple
 
 # Editor / OS
 .idea/
