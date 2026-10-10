@@ -36,6 +36,7 @@ A tiny **portable, no-install** tool for encrypting a single `.txt` file. The en
 | Drag & drop open | Drop a file onto the window → password prompt | ✅ (desktop) |
 | Idle auto-lock | 5 minutes by default; clears and drops the key | ✅ |
 | Keyboard shortcuts | Ctrl+N / O / S / Shift+S / L | ✅ |
+| Multi-language | Simplified Chinese / English, auto by default, switchable in Settings | ✅ |
 | Recent files | Opt-in and off by default; once enabled, reopened paths are listed in the toolbar with a one-click **Clear** | ✅ (desktop) |
 | Settings | Auto-lock minutes + the opt-in "remember recent files" toggle | ✅ |
 
@@ -144,6 +145,8 @@ safe-text/
     App.vue
     pages/IndexPage.vue                 # editor page (toolbar + textarea + password dialog + auto-lock + drag & drop)
     services/backend.js                 # calls Rust commands & Tauri plugins (dialog / fs / drag & drop)
+    i18n/{index.js,en-US.js,zh-CN.js}   # dependency-free i18n (locale ref + t()); messages here
+    boot/i18n.js                        # apply the persisted language before mount
     router/{index.js,routes.js}
     css/{app.scss,quasar.variables.scss}
   src-tauri/
@@ -157,7 +160,7 @@ safe-text/
       crypto.rs    # Argon2id + AES-256-GCM (with unit tests)
       format.rs    # 48-byte header encode / decode
       settings.rs  # settings (portable-first on desktop)
-      errors.rs    # errors → Chinese messages
+      errors.rs    # errors → stable codes (JSON), localized in the UI
   README.md
   README.zh-CN.md
   docs/         # UI screenshots referenced by the README

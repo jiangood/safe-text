@@ -37,7 +37,8 @@
 | 闲置自动锁定 | 默认 5 分钟，到时清空并丢弃密钥 | ✅ |
 | 键盘快捷键 | Ctrl+N / O / S / Shift+S / L | ✅ |
 | 最近文件 | 默认关闭；启用后工具栏列出最近打开路径，可一键**清空** | ✅（桌面） |
-| 设置 | 自动锁定分钟数 + "记住最近文件"开关 | ✅ |
+| 设置 | 自动锁定分钟数 + "记住最近文件"开关 + 语言 | ✅ |
+| 多语言 | 简体中文 / English，默认跟随系统，可在设置中手动切换 | ✅ |
 
 > 隐私：**"最近文件"默认关闭、需手动开启**。开启后仅在本地设置文件保存文件路径；关闭开关或点击**清空**会立即抹除，因此默认情况下不保存任何路径。
 
@@ -144,6 +145,8 @@ safe-text/
     App.vue
     pages/IndexPage.vue                 # 编辑器页面（工具栏 + 文本框 + 密码框 + 自动锁定 + 拖拽）
     services/backend.js                 # 调用 Rust 命令 & Tauri 插件（对话框 / 文件 / 拖拽）
+    i18n/{index.js,en-US.js,zh-CN.js}   # 零依赖 i18n（locale ref + t()）；词条都在这里
+    boot/i18n.js                        # 挂载前应用已保存的语言
     router/{index.js,routes.js}
     css/{app.scss,quasar.variables.scss}
   src-tauri/
@@ -157,7 +160,7 @@ safe-text/
       crypto.rs    # Argon2id + AES-256-GCM（含单元测试）
       format.rs    # 48 字节头编解码
       settings.rs  # 设置（桌面便携优先）
-      errors.rs    # 错误 → 中文提示
+      errors.rs    # 错误 → 稳定错误码（JSON），由前端本地化
   README.md
   README.zh-CN.md
   docs/         # README 引用的界面截图

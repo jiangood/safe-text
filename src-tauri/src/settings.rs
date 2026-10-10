@@ -25,6 +25,8 @@ pub struct Settings {
     /// Most-recent-first list of file paths. Only ever populated while
     /// `remember_recent` is true, and cleared the moment it is turned off.
     pub recent_files: Vec<String>,
+    /// UI language setting: "auto" (follow the system), "zh", or "en".
+    pub language: String,
 }
 
 impl Default for Settings {
@@ -33,6 +35,7 @@ impl Default for Settings {
             autolock_minutes: 5,
             remember_recent: false,
             recent_files: Vec::new(),
+            language: "auto".to_string(),
         }
     }
 }
@@ -108,6 +111,15 @@ mod tests {
         let s = Settings::default();
         assert!(!s.remember_recent);
         assert!(s.recent_files.is_empty());
+        assert_eq!(s.language, "auto");
+    }
+
+    #[test]
+    fn missing_language_defaults_to_auto() {
+        // Older settings files predate the `language` field.
+        let s: Settings = serde_json::from_str(r#"{"autolock_minutes":10}"#).unwrap();
+        assert_eq!(s.language, "auto");
+        assert_eq!(s.autolock_minutes, 10);
     }
 
     #[test]

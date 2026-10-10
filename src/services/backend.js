@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { readFile as fsReadFile, writeFile as fsWriteFile } from '@tauri-apps/plugin-fs'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { t } from '@/i18n'
 
 /** Normalise whatever Tauri returns (number[] or ArrayBuffer) to Uint8Array. */
 function toBytes (value) {
@@ -14,10 +15,33 @@ function toBytes (value) {
   return Uint8Array.from(value)
 }
 
-const TXT_FILTERS = [
-  { name: '加密文本 (*.txt)', extensions: ['txt'] },
-  { name: '所有文件', extensions: ['*'] }
-]
+/** Dialog file filters, localized at call time (labels change with the locale). */
+function txtFilters () {
+  return [
+    { name: t('dialogs.encryptedText'), extensions: ['txt'] },
+    { name: t('dialogs.allFiles'), extensions: ['*'] }
+  ]
+}
+
+/**
+ * Normalise an error raised by the backend into `{ code, detail }`.
+ *
+ * Rust commands reject with a JSON string `{"code":"...","message":"..."}`
+ * (see `errors.rs`); Tauri plugins (dialog / fs) reject with plain strings.
+ * Anything that does not parse becomes `{ code: 'unknown', detail: raw }`.
+ */
+export function parseError (e) {
+  const raw = typeof e === 'string' ? e : (e?.message ?? String(e))
+  try {
+    const obj = JSON.parse(raw)
+    if (obj && typeof obj.code === 'string') {
+      return { code: obj.code, detail: obj.message ?? '' }
+    }
+  } catch {
+    // not JSON – fall through to the raw string
+  }
+  return { code: 'unknown', detail: raw }
+}
 
 export const backend = {
   // ---- crypto (Rust) -----------------------------------------------------
@@ -54,10 +78,10 @@ export const backend = {
 
   // ---- dialogs -----------------------------------------------------------
   pickOpenPath: () =>
-    openDialog({ multiple: false, directory: false, filters: TXT_FILTERS }),
+    openDialog({ multiple: false, directory: false, filters: txtFilters() }),
 
   pickSavePath: (defaultName) =>
-    saveDialog({ defaultPath: defaultName, filters: TXT_FILTERS }),
+    saveDialog({ defaultPath: defaultName, filters: txtFilters() }),
 
   // ---- file I/O (fs plugin; dialog-scoped) -------------------------------
   readFile: (path) => fsReadFile(path),

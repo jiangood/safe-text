@@ -8,15 +8,15 @@
         </q-toolbar-title>
 
         <q-btn
-          flat dense no-caps icon="note_add" label="新建"
+          flat dense no-caps icon="note_add" :label="t('toolbar.new')"
           :disable="busy" @click="onNew"
         />
         <q-btn
-          flat dense no-caps icon="folder_open" label="打开"
+          flat dense no-caps icon="folder_open" :label="t('toolbar.open')"
           :disable="busy" @click="onOpen"
         />
         <q-btn
-          flat dense no-caps icon="history" label="最近"
+          flat dense no-caps icon="history" :label="t('toolbar.recent')"
           :disable="busy"
         >
           <q-menu auto-close>
@@ -41,7 +41,7 @@
                   <q-item-section avatar>
                     <q-icon name="delete_sweep" />
                   </q-item-section>
-                  <q-item-section>清空最近记录</q-item-section>
+                  <q-item-section>{{ t('recent.clear') }}</q-item-section>
                 </q-item>
               </template>
               <q-item v-else>
@@ -49,11 +49,11 @@
                   <q-icon name="info" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label>暂无最近文件</q-item-label>
+                  <q-item-label>{{ t('recent.empty') }}</q-item-label>
                   <q-item-label caption>
                     {{ rememberRecent
-                      ? '打开过的文件会出现在这里'
-                      : '在设置中启用“记住最近文件”后开始记录' }}
+                      ? t('recent.emptyHintEnabled')
+                      : t('recent.emptyHintDisabled') }}
                   </q-item-label>
                 </q-item-section>
               </q-item>
@@ -62,25 +62,25 @@
         </q-btn>
         <q-separator dark vertical inset class="q-mx-xs" />
         <q-btn
-          flat dense no-caps icon="save" label="保存"
+          flat dense no-caps icon="save" :label="t('toolbar.save')"
           :disable="busy || !unlocked" @click="onSave"
         />
         <q-btn
-          flat dense no-caps icon="save_as" label="另存为"
+          flat dense no-caps icon="save_as" :label="t('toolbar.saveAs')"
           :disable="busy || !unlocked" @click="onSaveAs"
         />
         <q-separator dark vertical inset class="q-mx-xs" />
         <q-btn
-          flat dense no-caps icon="key" label="改密码"
+          flat dense no-caps icon="key" :label="t('toolbar.changePassword')"
           :disable="busy || !unlocked" @click="onChangePassword"
         />
         <q-btn
-          flat dense no-caps icon="lock_outline" label="锁定"
+          flat dense no-caps icon="lock_outline" :label="t('toolbar.lock')"
           :disable="busy || !unlocked" @click="onLock(false)"
         />
         <q-space />
         <q-btn flat dense round icon="settings" :disable="busy" @click="openSettings">
-          <q-tooltip>设置</q-tooltip>
+          <q-tooltip>{{ t('toolbar.settings') }}</q-tooltip>
         </q-btn>
       </q-toolbar>
     </q-header>
@@ -111,7 +111,7 @@
             AES-256-GCM · Argon2id
           </span>
           <span class="text-caption" :class="dirty ? 'text-orange' : 'text-grey-6'">
-            {{ dirty ? '未保存' : '已保存' }}
+            {{ dirty ? t('status.unsaved') : t('status.saved') }}
           </span>
         </div>
       </q-page>
@@ -129,7 +129,7 @@
           <q-input
             v-model="pw.value"
             :type="pw.reveal ? 'text' : 'password'"
-            :label="pw.mode === 'open' ? '密码' : '新密码'"
+            :label="pw.mode === 'open' ? t('password.label') : t('password.newLabel')"
             filled autofocus
           >
             <template #append>
@@ -145,7 +145,7 @@
             v-if="pw.mode !== 'open'"
             v-model="pw.confirm"
             :type="pw.reveal ? 'text' : 'password'"
-            label="确认密码"
+            :label="t('password.confirmLabel')"
             filled
           />
 
@@ -156,13 +156,13 @@
             v-if="pw.mode === 'new'"
             class="text-caption text-grey-6"
           >
-            密码不会被保存，请务必牢记；遗失后无法恢复文件内容。
+            {{ t('password.warnNotSaved') }}
           </div>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat no-caps label="取消" @click="pwCancel" />
-          <q-btn unelevated no-caps color="primary" label="确定" @click="pwSubmit" />
+          <q-btn flat no-caps :label="t('common.cancel')" @click="pwCancel" />
+          <q-btn unelevated no-caps color="primary" :label="t('common.ok')" @click="pwSubmit" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -172,31 +172,41 @@
       <q-card style="min-width: 380px">
         <q-card-section class="row items-center">
           <q-icon name="settings" class="q-mr-sm" />
-          <div class="text-h6">设置</div>
+          <div class="text-h6">{{ t('settings.title') }}</div>
         </q-card-section>
 
         <q-card-section class="q-gutter-md">
+          <q-select
+            v-model="settings.language"
+            :options="languageSelectOptions"
+            :label="t('settings.language')"
+            emit-value
+            map-options
+            options-dense
+            filled
+          />
+
           <q-input
             v-model.number="settings.autolock"
             type="number"
-            label="闲置自动锁定（分钟，0 表示关闭）"
+            :label="t('settings.autolock')"
             min="0"
             filled
           />
 
           <q-toggle
             v-model="settings.rememberRecent"
-            label="记住最近打开的文件"
+            :label="t('settings.rememberRecent')"
             left-label
           />
           <div class="text-caption text-grey-6">
-            启用后仅在本地设置文件中保存文件路径，方便下次快速打开；关闭并保存将立即清除全部记录。
+            {{ t('settings.rememberRecentHint') }}
           </div>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat no-caps label="取消" @click="settings.open = false" />
-          <q-btn unelevated no-caps color="primary" label="保存" @click="onSaveSettings" />
+          <q-btn flat no-caps :label="t('common.cancel')" @click="settings.open = false" />
+          <q-btn unelevated no-caps color="primary" :label="t('common.save')" @click="onSaveSettings" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -204,19 +214,26 @@
     <!-- Busy overlay -->
     <q-inner-loading :showing="busy">
       <q-spinner-gears size="42px" color="primary" />
-      <div class="q-mt-sm text-grey-7">处理中…</div>
+      <div class="q-mt-sm text-grey-7">{{ t('common.processing') }}</div>
     </q-inner-loading>
   </q-layout>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { Dialog, Notify } from 'quasar'
-import { backend } from '@/services/backend'
+import { backend, parseError } from '@/services/backend'
+import {
+  t,
+  locale,
+  setLocale,
+  normalizeLanguageSetting,
+  languageOptions
+} from '@/i18n'
 
 const text = ref('')
 const filePath = ref(null)
-const fileName = ref('未命名.txt')
+const fileName = ref(t('common.untitled'))
 const dirty = ref(false)
 const unlocked = ref(false)
 const busy = ref(false)
@@ -238,8 +255,13 @@ let unlistenDrop = null
 const settings = reactive({
   open: false,
   autolock: 5,
-  rememberRecent: false
+  rememberRecent: false,
+  language: 'auto'
 })
+
+const languageSelectOptions = computed(() =>
+  languageOptions.map((o) => ({ label: t(o.labelKey), value: o.value }))
+)
 
 const pw = reactive({
   open: false,
@@ -254,26 +276,41 @@ const pw = reactive({
 
 const placeholder = computed(() =>
   unlocked.value
-    ? '在此输入内容，保存时将自动加密…'
-    : '点击“新建”创建加密文档，或“打开”已有加密 .txt 文件'
+    ? t('editor.placeholderUnlocked')
+    : t('editor.placeholderLocked')
 )
 
 const statusText = computed(() => {
-  if (!unlocked.value) return '未打开文档'
-  return `${fileName.value}${filePath.value ? '' : '（尚未保存到磁盘）'}`
+  if (!unlocked.value) return t('status.noDoc')
+  return `${fileName.value}${filePath.value ? '' : t('status.notOnDisk')}`
 })
 
 // ---------------------------------------------------------------------------
 // Notifications / confirmations
 // ---------------------------------------------------------------------------
-function notifyError (e) {
-  const msg = typeof e === 'string' ? e : (e?.message || String(e))
+function showError (code, detail) {
+  let message
+  if (code === 'unknown') {
+    // Plugin (dialog / fs) errors have no stable code – show the raw text.
+    message = detail || t('errors.unknown')
+  } else {
+    const key = `errors.${code}`
+    const translated = t(key, { detail })
+    message = translated === key
+      ? (detail || t('errors.unknown'))
+      : translated
+  }
   Dialog({
-    title: '出错了',
-    message: msg,
-    ok: { label: '知道了', color: 'negative', unelevated: true, noCaps: true },
+    title: t('common.errorTitle'),
+    message,
+    ok: { label: t('common.gotIt'), color: 'negative', unelevated: true, noCaps: true },
     persistent: true
   })
+}
+
+function notifyError (e) {
+  const { code, detail } = parseError(e)
+  showError(code, detail)
 }
 
 function notifyOk (msg) {
@@ -288,10 +325,10 @@ function notifyOk (msg) {
 function confirmDialog (message) {
   return new Promise((resolve) => {
     Dialog({
-      title: '确认',
+      title: t('common.confirmTitle'),
       message,
-      cancel: { label: '取消', noCaps: true, flat: true },
-      ok: { label: '确定', color: 'primary', unelevated: true, noCaps: true },
+      cancel: { label: t('common.cancel'), noCaps: true, flat: true },
+      ok: { label: t('common.ok'), color: 'primary', unelevated: true, noCaps: true },
       persistent: true
     })
       .onOk(() => resolve(true))
@@ -300,9 +337,9 @@ function confirmDialog (message) {
   })
 }
 
-function confirmDiscard (action) {
+function confirmDiscard (actionKey) {
   if (!dirty.value) return Promise.resolve(true)
-  return confirmDialog(`有未保存的修改，继续${action}将放弃这些修改。是否继续？`)
+  return confirmDialog(t('dialog.discard', { action: t(actionKey) }))
 }
 
 // ---------------------------------------------------------------------------
@@ -325,15 +362,15 @@ function promptPassword (title, mode) {
 
 function pwSubmit () {
   if (!pw.value) {
-    pw.error = '请输入密码'
+    pw.error = t('password.errEmpty')
     return
   }
   if (pw.mode !== 'open' && pw.value !== pw.confirm) {
-    pw.error = '两次输入的密码不一致'
+    pw.error = t('password.errMismatch')
     return
   }
   if (pw.mode !== 'open' && pw.value.length < 6) {
-    pw.error = '密码至少需要 6 个字符'
+    pw.error = t('password.errTooShort')
     return
   }
   const resolve = pw.resolver
@@ -353,10 +390,10 @@ function pwCancel () {
 // File helpers
 // ---------------------------------------------------------------------------
 function baseName (path) {
-  if (!path) return '未命名.txt'
+  if (!path) return t('common.untitled')
   const clean = String(path).replace(/[\\/]+$/, '')
   const parts = clean.split(/[\\/]/)
-  let name = parts[parts.length - 1] || '未命名.txt'
+  let name = parts[parts.length - 1] || t('common.untitled')
   // Strip a trailing query/fragment that content:// URIs may carry.
   const q = name.indexOf('?')
   if (q >= 0) name = name.slice(0, q)
@@ -374,7 +411,7 @@ function setOpened (path) {
 function resetDoc () {
   text.value = ''
   filePath.value = null
-  fileName.value = '未命名.txt'
+  fileName.value = t('common.untitled')
   dirty.value = false
   unlocked.value = false
   pathScoped.value = false
@@ -382,7 +419,7 @@ function resetDoc () {
 }
 
 function updateTitle () {
-  const lock = unlocked.value ? '已加密' : '未锁定'
+  const lock = unlocked.value ? t('title.encrypted') : t('title.unlocked')
   const star = dirty.value ? '*' : ''
   document.title = `${star}${fileName.value} - SafeText [${lock}]`
 }
@@ -420,24 +457,24 @@ async function rememberRecentFile (path) {
 // Commands
 // ---------------------------------------------------------------------------
 async function onNew () {
-  if (!(await confirmDiscard('新建'))) return
-  const password = await promptPassword('为新文档设置密码', 'new')
+  if (!(await confirmDiscard('actions.new'))) return
+  const password = await promptPassword(t('password.titleNew'), 'new')
   if (password === null) return
 
   busy.value = true
   try {
     text.value = ''
     const bytes = await backend.newDocument(password, text.value)
-    const path = await backend.pickSavePath('未命名.txt')
+    const path = await backend.pickSavePath(t('common.untitled'))
     if (path) {
       await backend.writeFile(path, bytes)
       setOpened(path)
       pathScoped.value = true
-      notifyOk('已创建并保存')
+      notifyOk(t('notify.created'))
     } else {
       // Created in memory only; key is already cached in Rust.
       filePath.value = null
-      fileName.value = '未命名.txt'
+      fileName.value = t('common.untitled')
       unlocked.value = true
       dirty.value = true
       updateTitle()
@@ -450,7 +487,7 @@ async function onNew () {
 }
 
 async function onOpen () {
-  if (!(await confirmDiscard('打开'))) return
+  if (!(await confirmDiscard('actions.open'))) return
   let path
   try {
     path = await backend.pickOpenPath()
@@ -463,7 +500,7 @@ async function onOpen () {
 }
 
 async function onOpenRecent (path) {
-  if (!(await confirmDiscard('打开'))) return
+  if (!(await confirmDiscard('actions.open'))) return
   await openFromPath(path, () => backend.readFileByPath(path), false)
 }
 
@@ -480,13 +517,13 @@ async function openFromPath (path, reader, viaDialog = false) {
   busy.value = false
 
   if (!(await backend.probeFile(bytes))) {
-    notifyError('不是有效加密文件')
+    showError('not_encrypted')
     return
   }
 
   // Retry loop so the user can re-enter the password after a failure.
   for (;;) {
-    const password = await promptPassword('输入密码以打开', 'open')
+    const password = await promptPassword(t('password.titleOpen'), 'open')
     if (password === null) return
     busy.value = true
     try {
@@ -495,22 +532,22 @@ async function openFromPath (path, reader, viaDialog = false) {
       setOpened(path)
       pathScoped.value = viaDialog
       await rememberRecentFile(path)
-      notifyOk('已打开')
+      notifyOk(t('notify.opened'))
       return
     } catch (e) {
       busy.value = false
-      const msg = String(e)
-      if (msg.includes('密码错误')) {
+      const { code, detail } = parseError(e)
+      if (code === 'bad_password') {
         await new Promise((resolve) => {
           Dialog({
-            title: '无法打开',
-            message: msg,
-            ok: { label: '重试', color: 'primary', unelevated: true, noCaps: true }
+            title: t('dialog.cannotOpen'),
+            message: t('errors.bad_password'),
+            ok: { label: t('common.retry'), color: 'primary', unelevated: true, noCaps: true }
           }).onOk(resolve).onDismiss(resolve)
         })
         continue
       }
-      notifyError(msg)
+      showError(code, detail)
       return
     } finally {
       busy.value = false
@@ -520,7 +557,7 @@ async function openFromPath (path, reader, viaDialog = false) {
 
 async function requireUnlocked () {
   if (unlocked.value) return true
-  notifyError('没有已解锁的文档')
+  showError('no_session')
   return false
 }
 
@@ -534,7 +571,7 @@ async function onSave () {
     await writeCurrentFile(bytes)
     dirty.value = false
     updateTitle()
-    notifyOk('已保存')
+    notifyOk(t('notify.saved'))
   } catch (e) {
     notifyError(e)
   } finally {
@@ -547,12 +584,12 @@ async function onSaveAs () {
   busy.value = true
   try {
     const bytes = await backend.saveDocument(text.value)
-    const path = await backend.pickSavePath(fileName.value || '未命名.txt')
+    const path = await backend.pickSavePath(fileName.value || t('common.untitled'))
     if (!path) return
     await backend.writeFile(path, bytes)
     setOpened(path)
     pathScoped.value = true
-    notifyOk('已保存')
+    notifyOk(t('notify.saved'))
   } catch (e) {
     notifyError(e)
   } finally {
@@ -562,7 +599,7 @@ async function onSaveAs () {
 
 async function onChangePassword () {
   if (!(await requireUnlocked())) return
-  const password = await promptPassword('设置新密码', 'change')
+  const password = await promptPassword(t('password.titleChange'), 'change')
   if (password === null) return
 
   busy.value = true
@@ -572,9 +609,9 @@ async function onChangePassword () {
       await writeCurrentFile(bytes)
       dirty.value = false
       updateTitle()
-      notifyOk('密码已修改并保存')
+      notifyOk(t('notify.passwordChangedSaved'))
     } else {
-      const path = await backend.pickSavePath(fileName.value || '未命名.txt')
+      const path = await backend.pickSavePath(fileName.value || t('common.untitled'))
       if (path) {
         await backend.writeFile(path, bytes)
         setOpened(path)
@@ -582,7 +619,7 @@ async function onChangePassword () {
       } else {
         dirty.value = true
       }
-      notifyOk('密码已修改')
+      notifyOk(t('notify.passwordChanged'))
     }
   } catch (e) {
     notifyError(e)
@@ -593,7 +630,7 @@ async function onChangePassword () {
 
 async function onLock (force) {
   if (!unlocked.value && !text.value) return
-  if (!force && !(await confirmDiscard('锁定'))) return
+  if (!force && !(await confirmDiscard('actions.lock'))) return
 
   try {
     await backend.lock()
@@ -602,7 +639,7 @@ async function onLock (force) {
     console.error(e)
   }
   resetDoc()
-  if (!force) notifyOk('已锁定')
+  if (!force) notifyOk(t('notify.locked'))
 }
 
 // ---------------------------------------------------------------------------
@@ -631,6 +668,13 @@ async function loadSettings () {
     }
     rememberRecent.value = !!(s && s.remember_recent)
     recentFiles.value = Array.isArray(s?.recent_files) ? s.recent_files : []
+
+    // Keep the UI in sync with the persisted language (the boot file already
+    // applied it; this covers the case where the boot ran before the store
+    // was ready).
+    const lang = normalizeLanguageSetting(s?.language)
+    settings.language = lang
+    setLocale(lang)
   } catch (e) {
     console.warn('load settings failed', e)
   }
@@ -651,16 +695,21 @@ async function onSaveSettings () {
   // The backend also wipes paths when remembering is off; keep the UI in sync.
   if (!rememberRecent.value) recentFiles.value = []
 
+  const lang = normalizeLanguageSetting(settings.language)
+
   busy.value = true
   try {
     await backend.saveSettings({
       autolock_minutes: autolockMinutes.value,
       remember_recent: rememberRecent.value,
-      recent_files: recentFiles.value
+      recent_files: recentFiles.value,
+      language: lang
     })
+    // Apply the language only after it has been persisted successfully.
+    setLocale(lang)
     resetIdle()
     settings.open = false
-    notifyOk('设置已保存')
+    notifyOk(t('settings.saved'))
   } catch (e) {
     notifyError(e)
   } finally {
@@ -669,13 +718,13 @@ async function onSaveSettings () {
 }
 
 async function onClearRecent () {
-  if (recentFiles.value.length && !(await confirmDialog('确定要清空最近文件记录吗？'))) {
+  if (recentFiles.value.length && !(await confirmDialog(t('recent.clearConfirm')))) {
     return
   }
   try {
     const s = await backend.clearRecentFiles()
     recentFiles.value = Array.isArray(s?.recent_files) ? s.recent_files : []
-    notifyOk('已清空最近记录')
+    notifyOk(t('recent.cleared'))
   } catch (e) {
     notifyError(e)
   }
@@ -693,6 +742,9 @@ function onKey (ev) {
   else if (key === 's') { ev.preventDefault(); onSave() }
   else if (key === 'l') { ev.preventDefault(); onLock(false) }
 }
+
+// Keep the (localized) window title in sync when the language changes.
+watch(locale, updateTitle)
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -713,7 +765,7 @@ onMounted(async () => {
       if (!payload || payload.type !== 'drop') return
       const paths = payload.paths || []
       if (paths.length === 0) return
-      if (!(await confirmDiscard('打开'))) return
+      if (!(await confirmDiscard('actions.open'))) return
       const path = paths[0]
       await openFromPath(path, () => backend.readFileByPath(path))
     })
