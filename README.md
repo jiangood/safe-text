@@ -3,7 +3,7 @@
 一个**绿色免安装**的小工具，用于加密单个 `.txt` 文件。加密后的文件**只有本软件能正常打开编辑**，用系统记事本、Notepad++、VS Code 等任何其他软件打开都是乱码。
 
 > 技术栈：**Quasar (Vue 3 + Vite) + Tauri 2**，加密全部在 Rust 侧完成
-> 状态：桌面端已实现并可构建（`cargo test` 通过，`quasar build` 通过）；Android 目标已保留代码路径
+> 状态：Windows / Android 已实现并接入 GitHub Actions 自动打包发布（`cargo test` 通过，桌面端本地构建通过）
 
 ---
 
@@ -14,7 +14,7 @@
 - 密码错误拒绝打开并提示
 - 标准密码学，不自创算法、不硬编码密钥
 
-**平台**：Windows / macOS / Linux 桌面 + Android（同一份 Rust 加密代码）。
+**发布平台**：Windows（`.msi` / `-setup.exe`）+ Android（`.apk`），同一份 Rust 加密代码。
 
 ---
 
@@ -184,25 +184,30 @@ npm run build          # 仅构建前端 SPA（输出 dist/spa）
 
 ### Android
 
+本地需要 Android SDK + NDK + JDK（Tauri 2 无需单独装 `cargo-ndk`）：
+
 ```bash
 npm run tauri -- android init
 npm run tauri -- android build --apk
 ```
 
-- 前置：Android SDK + NDK + JDK 21 + `cargo-ndk` + android rust targets。
+- 前置：Android SDK + NDK + JDK 17+ + android rust targets（`aarch64-linux-android` 等，Tauri 会自动按需安装）。
 - 无模拟器 / 真机时只能编译 APK，无法实测运行。
+- 发布时由 GitHub Actions 自动完成 `android init` → `build --apk` → 用仓库 Secrets 中的签名密钥 `apksigner` 签名 → 上传到同一次 Release。
+
+> ⚠️ Release 构建未经签名验证，装机会提示“未知来源”；Keep 好签名密钥（仓库 Secrets `ANDROID_KEYSTORE_*`），后续版本须用同一密钥才能覆盖安装。
 
 ### 验证
 
 1. `cargo test`（在 `src-tauri/`）：加解密往返、错误密码拒绝、篡改检测、头部篡改、Magic 校验、截断报错、空内容
 2. 桌面实测：新建 → 保存 → 记事本打开乱码 → 本软件重开正常 → 改密码 → 重开正常
-3. Android：编译产出 APK
+3. Android：CI 编译并签名产出 APK（本机无 SDK/NDK 时无法本地实测，属已知限制）
 
 ---
 
 ## 十、已知风险 / 待办
 
-1. **Android 工具链**未安装：需 SDK + NDK（数 GB）才能出 APK。
+1. **Android 真机行为未实测**：CI 能编译并签名产出 APK，但无模拟器/真机，运行期（尤其 `content://` 读写、自动锁定）需实机验证。
 2. **Android 写回 `content://`** 存在插件已知坑（plugins-workspace #3356），如遇问题可换 `tauri-plugin-android-fs` 或补一小段 Kotlin/JNI。
 3. **分享 Intent**（Android 从文件管理器直接打开）尚未实现。
 4. **应用级 CSP** 目前关闭以保证 Tauri IPC 稳定；后续可在 `tauri.conf.json` 的 `app.security.csp` 收紧。
