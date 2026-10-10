@@ -36,8 +36,10 @@ A tiny **portable, no-install** tool for encrypting a single `.txt` file. The en
 | Drag & drop open | Drop a file onto the window → password prompt | ✅ (desktop) |
 | Idle auto-lock | 5 minutes by default; clears and drops the key | ✅ |
 | Keyboard shortcuts | Ctrl+N / O / S / Shift+S / L | ✅ |
+| Recent files | Opt-in and off by default; once enabled, reopened paths are listed in the toolbar with a one-click **Clear** | ✅ (desktop) |
+| Settings | Auto-lock minutes + the opt-in "remember recent files" toggle | ✅ |
 
-> Privacy: **no "recent files" list** is kept, and the settings file contains no file paths.
+> Privacy: the **"recent files" list is opt-in and off by default**. When enabled it stores file paths in the local settings file only, and disabling it (or **Clear**) wipes them immediately — so by default no paths are ever persisted.
 
 ---
 
@@ -74,8 +76,8 @@ A tiny **portable, no-install** tool for encrypting a single `.txt` file. The en
 **Key decisions**
 - Crypto lives in **Rust**: Argon2id (not available in WebCrypto), reliable wiping via `zeroize`, and one shared implementation for desktop and Android.
 - **File I/O lives in frontend plugins**: read / write via the `dialog` + `fs` plugins, which naturally support Android `content://` URIs; the crypto commands only exchange bytes and never touch the filesystem (easy to unit test).
-- Drag & drop open is read by the Rust `read_file` command (a dropped path has no dialog-authorized scope).
-- No "recent files" list; the config stores no file paths.
+- Drag & drop (and recent-list) opens are read/written by the Rust `read_file` / `write_file` commands, since those paths have no dialog-authorized fs scope; dialog-opened files keep using the fs plugin.
+- The "recent files" list is **opt-in and off by default**; enabling it stores only file paths in the local settings file, and disabling it (or **Clear**) wipes them.
 
 ---
 
@@ -109,7 +111,9 @@ The main window is shown at the top of this README. The password box used for Ne
 
 ![Password box for a new document](docs/screenshot-password.png)
 
-- Top toolbar `q-toolbar` + `q-btn`: New / Open / Save / Save As / Change password / Lock
+- Top toolbar `q-toolbar` + `q-btn`: New / Open / Recent / Save / Save As / Change password / Lock / Settings
+- "Recent" opens a menu of remembered files (off by default; opt in via Settings) with a Clear action
+- Settings dialog: auto-lock minutes + the "remember recent files" toggle
 - A single full-window multiline text box in the middle (monospace)
 - Bottom status bar: file name, lock state, save state, algorithm label
 - Password box `q-dialog`: double-entry confirmation and length validation for New / Change; the title bar shows the file name + `*` (unsaved)
@@ -169,8 +173,11 @@ safe-text/
 | `change_password(new_password, text)` | New salt + key, re-encrypt; update the session |
 | `lock()` | Clear and wipe the session key |
 | `probe_file(data)` | Structural probe: is this a SafeText file? |
-| `read_file(path)` | Read a file by path (for drag & drop) |
-| `load_settings()` / `save_settings(settings)` | Read / write settings |
+| `read_file(path)` | Read a file by path (for drag & drop / recent files) |
+| `write_file(path, data)` | Write bytes by path (for drag & drop / recent files) |
+| `load_settings()` / `save_settings(settings)` | Read / write settings (paths are wiped when "remember recent" is off) |
+| `add_recent_file(path)` | Record a path in the opt-in recent list (no-op unless enabled) |
+| `clear_recent_files()` | Forget every remembered path |
 
 ---
 

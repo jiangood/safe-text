@@ -41,9 +41,16 @@ export const backend = {
   readFileByPath: (path) =>
     invoke('read_file', { path }).then(toBytes),
 
+  writeFileByPath: (path, bytes) =>
+    invoke('write_file', { path, data: Array.from(bytes) }),
+
   // ---- settings ----------------------------------------------------------
   loadSettings: () => invoke('load_settings'),
   saveSettings: (settings) => invoke('save_settings', { settings }),
+
+  // ---- recent files (opt-in) ---------------------------------------------
+  addRecentFile: (path) => invoke('add_recent_file', { path }),
+  clearRecentFiles: () => invoke('clear_recent_files'),
 
   // ---- dialogs -----------------------------------------------------------
   pickOpenPath: () =>

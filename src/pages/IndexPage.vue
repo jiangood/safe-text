@@ -15,6 +15,51 @@
           flat dense no-caps icon="folder_open" label="打开"
           :disable="busy" @click="onOpen"
         />
+        <q-btn
+          flat dense no-caps icon="history" label="最近"
+          :disable="busy"
+        >
+          <q-menu auto-close>
+            <q-list style="min-width: 280px; max-width: 420px">
+              <template v-if="recentFiles.length">
+                <q-item
+                  v-for="p in recentFiles"
+                  :key="p"
+                  clickable v-close-popup
+                  @click="onOpenRecent(p)"
+                >
+                  <q-item-section avatar>
+                    <q-icon name="description" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ baseName(p) }}</q-item-label>
+                    <q-item-label caption lines="1">{{ p }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-separator />
+                <q-item clickable v-close-popup @click="onClearRecent">
+                  <q-item-section avatar>
+                    <q-icon name="delete_sweep" />
+                  </q-item-section>
+                  <q-item-section>清空最近记录</q-item-section>
+                </q-item>
+              </template>
+              <q-item v-else>
+                <q-item-section avatar>
+                  <q-icon name="info" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>暂无最近文件</q-item-label>
+                  <q-item-label caption>
+                    {{ rememberRecent
+                      ? '打开过的文件会出现在这里'
+                      : '在设置中启用“记住最近文件”后开始记录' }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </q-btn>
         <q-separator dark vertical inset class="q-mx-xs" />
         <q-btn
           flat dense no-caps icon="save" label="保存"
@@ -33,6 +78,10 @@
           flat dense no-caps icon="lock_outline" label="锁定"
           :disable="busy || !unlocked" @click="onLock(false)"
         />
+        <q-space />
+        <q-btn flat dense round icon="settings" :disable="busy" @click="openSettings">
+          <q-tooltip>设置</q-tooltip>
+        </q-btn>
       </q-toolbar>
     </q-header>
 
@@ -118,6 +167,40 @@
       </q-card>
     </q-dialog>
 
+    <!-- Settings -->
+    <q-dialog v-model="settings.open">
+      <q-card style="min-width: 380px">
+        <q-card-section class="row items-center">
+          <q-icon name="settings" class="q-mr-sm" />
+          <div class="text-h6">设置</div>
+        </q-card-section>
+
+        <q-card-section class="q-gutter-md">
+          <q-input
+            v-model.number="settings.autolock"
+            type="number"
+            label="闲置自动锁定（分钟，0 表示关闭）"
+            min="0"
+            filled
+          />
+
+          <q-toggle
+            v-model="settings.rememberRecent"
+            label="记住最近打开的文件"
+            left-label
+          />
+          <div class="text-caption text-grey-6">
+            启用后仅在本地设置文件中保存文件路径，方便下次快速打开；关闭并保存将立即清除全部记录。
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="取消" @click="settings.open = false" />
+          <q-btn unelevated no-caps color="primary" label="保存" @click="onSaveSettings" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Busy overlay -->
     <q-inner-loading :showing="busy">
       <q-spinner-gears size="42px" color="primary" />
@@ -139,10 +222,24 @@ const unlocked = ref(false)
 const busy = ref(false)
 const textareaRef = ref(null)
 
+// `pathScoped` tracks whether the current file's path carries a dialog-granted
+// fs scope. Files opened from the recent list / drag & drop do not, so they are
+// read & written through the Rust commands instead of the fs plugin.
+const pathScoped = ref(false)
+
+const recentFiles = ref([])
+const rememberRecent = ref(false)
+
 const autolockMinutes = ref(5)
 let lastActivity = Date.now()
 let idleTimer = null
 let unlistenDrop = null
+
+const settings = reactive({
+  open: false,
+  autolock: 5,
+  rememberRecent: false
+})
 
 const pw = reactive({
   open: false,
@@ -280,6 +377,7 @@ function resetDoc () {
   fileName.value = '未命名.txt'
   dirty.value = false
   unlocked.value = false
+  pathScoped.value = false
   updateTitle()
 }
 
@@ -293,6 +391,29 @@ function onEdit () {
   dirty.value = true
   resetIdle()
   updateTitle()
+}
+
+// Write the ciphertext back to the current path, choosing the fs plugin for
+// dialog-scoped paths and the Rust command otherwise (drag & drop / recent).
+async function writeCurrentFile (bytes) {
+  if (!filePath.value) return
+  if (pathScoped.value) {
+    await backend.writeFile(filePath.value, bytes)
+  } else {
+    await backend.writeFileByPath(filePath.value, bytes)
+  }
+}
+
+// Remember a path in the opt-in recent list. content:// URIs are skipped
+// because they are not reopenable by path.
+async function rememberRecentFile (path) {
+  if (!rememberRecent.value || !path || String(path).includes('://')) return
+  try {
+    const s = await backend.addRecentFile(path)
+    if (s && Array.isArray(s.recent_files)) recentFiles.value = s.recent_files
+  } catch (e) {
+    console.warn('record recent file failed', e)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -311,6 +432,7 @@ async function onNew () {
     if (path) {
       await backend.writeFile(path, bytes)
       setOpened(path)
+      pathScoped.value = true
       notifyOk('已创建并保存')
     } else {
       // Created in memory only; key is already cached in Rust.
@@ -337,10 +459,15 @@ async function onOpen () {
     return
   }
   if (!path) return
-  await openFromPath(path, () => backend.readFile(path))
+  await openFromPath(path, () => backend.readFile(path), true)
 }
 
-async function openFromPath (path, reader) {
+async function onOpenRecent (path) {
+  if (!(await confirmDiscard('打开'))) return
+  await openFromPath(path, () => backend.readFileByPath(path), false)
+}
+
+async function openFromPath (path, reader, viaDialog = false) {
   busy.value = true
   let bytes
   try {
@@ -366,6 +493,8 @@ async function openFromPath (path, reader) {
       const plain = await backend.openDocument(password, bytes)
       text.value = plain
       setOpened(path)
+      pathScoped.value = viaDialog
+      await rememberRecentFile(path)
       notifyOk('已打开')
       return
     } catch (e) {
@@ -402,7 +531,7 @@ async function onSave () {
   busy.value = true
   try {
     const bytes = await backend.saveDocument(text.value)
-    await backend.writeFile(filePath.value, bytes)
+    await writeCurrentFile(bytes)
     dirty.value = false
     updateTitle()
     notifyOk('已保存')
@@ -422,6 +551,7 @@ async function onSaveAs () {
     if (!path) return
     await backend.writeFile(path, bytes)
     setOpened(path)
+    pathScoped.value = true
     notifyOk('已保存')
   } catch (e) {
     notifyError(e)
@@ -439,7 +569,7 @@ async function onChangePassword () {
   try {
     const bytes = await backend.changePassword(password, text.value)
     if (filePath.value) {
-      await backend.writeFile(filePath.value, bytes)
+      await writeCurrentFile(bytes)
       dirty.value = false
       updateTitle()
       notifyOk('密码已修改并保存')
@@ -448,6 +578,7 @@ async function onChangePassword () {
       if (path) {
         await backend.writeFile(path, bytes)
         setOpened(path)
+        pathScoped.value = true
       } else {
         dirty.value = true
       }
@@ -498,8 +629,55 @@ async function loadSettings () {
     if (s && typeof s.autolock_minutes === 'number') {
       autolockMinutes.value = s.autolock_minutes
     }
+    rememberRecent.value = !!(s && s.remember_recent)
+    recentFiles.value = Array.isArray(s?.recent_files) ? s.recent_files : []
   } catch (e) {
     console.warn('load settings failed', e)
+  }
+}
+
+function openSettings () {
+  settings.autolock = autolockMinutes.value
+  settings.rememberRecent = rememberRecent.value
+  settings.open = true
+}
+
+async function onSaveSettings () {
+  const minutes = Number(settings.autolock)
+  autolockMinutes.value = Number.isFinite(minutes) && minutes >= 0
+    ? Math.floor(minutes)
+    : 5
+  rememberRecent.value = !!settings.rememberRecent
+  // The backend also wipes paths when remembering is off; keep the UI in sync.
+  if (!rememberRecent.value) recentFiles.value = []
+
+  busy.value = true
+  try {
+    await backend.saveSettings({
+      autolock_minutes: autolockMinutes.value,
+      remember_recent: rememberRecent.value,
+      recent_files: recentFiles.value
+    })
+    resetIdle()
+    settings.open = false
+    notifyOk('设置已保存')
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function onClearRecent () {
+  if (recentFiles.value.length && !(await confirmDialog('确定要清空最近文件记录吗？'))) {
+    return
+  }
+  try {
+    const s = await backend.clearRecentFiles()
+    recentFiles.value = Array.isArray(s?.recent_files) ? s.recent_files : []
+    notifyOk('已清空最近记录')
+  } catch (e) {
+    notifyError(e)
   }
 }
 

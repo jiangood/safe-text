@@ -105,12 +105,41 @@ pub fn read_file(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&path).map_err(|e| Error::Io(e.to_string()).into())
 }
 
+/// Write bytes to a path (used for files opened without a dialog scope, e.g.
+/// drag-and-drop or the recent list). Dialog-mediated writes use the fs plugin.
+#[tauri::command]
+pub fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
+    std::fs::write(&path, &data).map_err(|e| Error::Io(e.to_string()).into())
+}
+
 #[tauri::command]
 pub fn load_settings(app: AppHandle) -> Result<Settings, String> {
     Ok(settings::load(&app))
 }
 
 #[tauri::command]
-pub fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+pub fn save_settings(app: AppHandle, mut settings: Settings) -> Result<(), String> {
+    // Never persist paths once the user has turned remembering off.
+    if !settings.remember_recent {
+        settings.clear_recent();
+    }
     settings::save(&app, &settings).map_err(String::from)
+}
+
+/// Record `path` in the opt-in recent list (no-op unless the user enabled it).
+#[tauri::command]
+pub fn add_recent_file(app: AppHandle, path: String) -> Result<Settings, String> {
+    let mut settings = settings::load(&app);
+    settings.push_recent(&path);
+    settings::save(&app, &settings).map_err(String::from)?;
+    Ok(settings)
+}
+
+/// Forget every remembered file path.
+#[tauri::command]
+pub fn clear_recent_files(app: AppHandle) -> Result<Settings, String> {
+    let mut settings = settings::load(&app);
+    settings.clear_recent();
+    settings::save(&app, &settings).map_err(String::from)?;
+    Ok(settings)
 }
